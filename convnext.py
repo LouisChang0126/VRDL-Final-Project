@@ -32,20 +32,18 @@ def set_seed(seed=42):
     torch.backends.cudnn.benchmark = False
 
 train_transforms = v2.Compose([
-    v2.RandomResizedCrop(224),
+    v2.RandomResizedCrop(224, scale=(0.9, 1.0), ratio=(0.75, 1.3333), interpolation=v2.InterpolationMode.BICUBIC, antialias=True),
     v2.RandomRotation(degrees=20),
     v2.RandomHorizontalFlip(),
-    v2.ColorJitter(brightness=0.4, contrast=0.4, saturation=0.4, hue=0.1),
     v2.ToTensor(),
-    v2.ConvertImageDtype(torch.float),
-    v2.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+    v2.ConvertImageDtype(torch.float)
 ])
+
 test_transforms = v2.Compose([
-    v2.Resize(360),
-    v2.CenterCrop(224),
+    v2.Resize(size=224, interpolation=v2.InterpolationMode.BICUBIC, max_size=None, antialias=True),
+    v2.CenterCrop(size=(224, 224)),
     v2.ToTensor(),
-    v2.ConvertImageDtype(torch.float),
-    v2.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+    v2.ConvertImageDtype(torch.float)
 ])
 cutmix = v2.CutMix(num_classes=CLASS_NUM, alpha=1.0)
 

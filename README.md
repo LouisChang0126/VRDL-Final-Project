@@ -16,5 +16,5 @@ unzip cassava-leaf-disease-classification.zip -d ./data
 
 ## Val Accuracy
 
-* convnext: 0.8850
-* bioclip:  0.8963
+* convnext: 0.8949
+* bioclip:  0.8963--不穩定，可能變0.87

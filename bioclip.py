@@ -12,13 +12,21 @@ from tqdm import tqdm
 from torchvision.transforms import v2
 from sklearn.model_selection import train_test_split
 
-seed = 132
+seed = 42
 BATCH_SIZE = 32
 EPOCH = 40
 PATIENCE = 10
 LEARNING_RATE = 1e-5
+NAMING = "BioCLIP"
 device = torch.device("cuda:2" if torch.cuda.is_available() else "cpu")
 
+def set_seed(seed=42):
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+    np.random.seed(seed)
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
+set_seed(seed)
 
 train_transforms = v2.Compose([
     v2.RandomResizedCrop(224, scale=(0.9, 1.0), ratio=(0.75, 1.3333), interpolation=v2.InterpolationMode.BICUBIC, antialias=True),
@@ -76,10 +84,10 @@ class CassavaDataset(Dataset):
         return image, text_tokens, label
 
 df = pd.read_csv('data/train.csv')
-train_df, val_df = train_test_split(df, test_size=0.1, stratify=df['label'])
+train_df, val_df = train_test_split(df, test_size=0.1, stratify=df['label'], random_state=42)
 
-train_dataset = CassavaDataset(train_df, img_dir='data/train_images', transform=train_transforms)
-val_dataset = CassavaDataset(val_df, img_dir='data/train_images', transform=val_transforms)
+train_dataset = CassavaDataset(train_df, img_dir='data/train_images', transform=preprocess_train)
+val_dataset = CassavaDataset(val_df, img_dir='data/train_images', transform=preprocess_val)
 train_loader = DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=True, num_workers=12)
 val_loader = DataLoader(val_dataset, batch_size=BATCH_SIZE, shuffle=False, num_workers=12)
 
@@ -108,6 +116,7 @@ best_model_state = None
 early_stop_counter = 0
 tokenized_prompts = tokenizer(prompts).to(device)
 
+print(f'start running {NAMING}')
 for epoch in range(EPOCH):
     model.train()
     train_loss = 0.0
@@ -170,5 +179,5 @@ for epoch in range(EPOCH):
     scheduler.step()
 
 model.load_state_dict(best_model_state)
-torch.save(model.state_dict(), 'best_cassava_bioclip_clip.pth')
+torch.save(model.state_dict(), f'model_{NAMING}_seed{seed}.pth')
 print(f"Best model saved with validation accuracy: {best_accuracy:.4f}")

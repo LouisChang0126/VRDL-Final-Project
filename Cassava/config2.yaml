@@ -1,0 +1,31 @@
+models:
+
+  - arch_name: swin_base_patch4_window12_384
+    image_size: 384
+    use_external: True
+    multi_dropout: False
+    att_layer: False
+    att_pattern: None
+    model_name: swin_transformer_v2
+    label_smooth: False
+    label_smooth_alpha: 0.
+
+  - arch_name: convnext_base
+    image_size: 384
+    use_external: True
+    multi_dropout: False
+    att_layer: False
+    att_pattern: None
+    model_name: convnext_base
+    label_smooth: False
+    label_smooth_alpha: 0.
+
+  - arch_name: efficientnetv2_l
+    image_size: 384
+    use_external: True
+    multi_dropout: False
+    att_layer: False
+    att_pattern: None
+    model_name: efficientnetv2_l
+    label_smooth: False
+    label_smooth_alpha: 0.

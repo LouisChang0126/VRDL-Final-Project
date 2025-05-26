@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader, Dataset
-# from torchvision import models # models.convnext_base is no longer used
+
 from torchvision.transforms import v2
 import os
 import pandas as pd
@@ -18,11 +18,11 @@ os.environ["CUDA_VISIBLE_DEVICES"] = '0'
 BATCH_SIZE = 64
 EPOCHS = 35
 PATIENCE = 10
-LEARNING_RATE = 1e-4 # Learning rate for the classifier
-LEARNING_RATE_BACKBONE = 1e-5 # Smaller learning rate for the backbone if unfreezing
+LEARNING_RATE = 1e-4 
+LEARNING_RATE_BACKBONE = 1e-5 
 CLASS_NUM = 5
-NAMING = "DINOv2_vitl14" # Changed to DINOv2
-DINOV2_MODEL_NAME = 'dinov2_vitl14' # You can choose from: dinov2_vits14, dinov2_vitb14, dinov2_vitl14, dinov2_vitg14
+NAMING = "DINOv2_vitl14" 
+DINOV2_MODEL_NAME = 'dinov2_vitl14'
 
 # Set Random Seed
 def set_seed(seed=42):
@@ -42,7 +42,7 @@ train_transforms = v2.Compose([
     v2.RandomHorizontalFlip(),
     v2.ToTensor(),
     v2.ConvertImageDtype(torch.float),
-    v2.Normalize(mean=DINOV2_MEAN, std=DINOV2_STD) # Added DINOv2 normalization
+    v2.Normalize(mean=DINOV2_MEAN, std=DINOV2_STD)
 ])
 
 test_transforms = v2.Compose([
@@ -50,7 +50,7 @@ test_transforms = v2.Compose([
     v2.CenterCrop(size=(224, 224)),
     v2.ToTensor(),
     v2.ConvertImageDtype(torch.float),
-    v2.Normalize(mean=DINOV2_MEAN, std=DINOV2_STD) # Added DINOv2 normalization
+    v2.Normalize(mean=DINOV2_MEAN, std=DINOV2_STD)
 ])
 cutmix = v2.CutMix(num_classes=CLASS_NUM, alpha=1.0)
 
@@ -76,9 +76,7 @@ class myDataset(Dataset):
         return image, label
 
 
-# Read labels
 df = pd.read_csv('data/train.csv')
-# Split into train/val (90/10) stratified by label
 train_df, val_df = train_test_split(df, test_size=0.1, stratify=df['label'], random_state=42)
 
 train_dataset = myDataset(train_df, img_dir='data/train_images', transform=train_transforms)
@@ -89,8 +87,6 @@ class DINOv2Classifier(nn.Module):
     def __init__(self, num_classes=CLASS_NUM, dinov2_model_name=DINOV2_MODEL_NAME, freeze_backbone=True):
         super(DINOv2Classifier, self).__init__()
         self.dinov2_model_name = dinov2_model_name
-        # Load DINOv2 model from PyTorch Hub
-        # For DINOv2, the 'repo_or_dir' should be 'facebookresearch/dinov2'
         try:
             self.dinov2 = torch.hub.load('facebookresearch/dinov2', self.dinov2_model_name, pretrained=True)
         except Exception as e:
@@ -99,9 +95,6 @@ class DINOv2Classifier(nn.Module):
             print("You might also need to install dependencies like 'timm'. Try: pip install timm")
             raise
 
-        # DINOv2 models output features, not class logits directly from the backbone
-        # The feature dimension depends on the model variant
-        # For ViT-B/14, it's 768. For ViT-L/14, it's 1024. For ViT-g/14 it's 1536
         if 'vitb' in self.dinov2_model_name:
             embed_dim = 768
         elif 'vits' in self.dinov2_model_name:
@@ -120,11 +113,10 @@ class DINOv2Classifier(nn.Module):
         if freeze_backbone:
             for param in self.dinov2.parameters():
                 param.requires_grad = False
-            # Ensure the classifier head parameters are trainable
+
             for param in self.classifier_head.parameters():
                 param.requires_grad = True
         else:
-            # All parameters are trainable
             for param in self.dinov2.parameters():
                 param.requires_grad = True
             for param in self.classifier_head.parameters():
@@ -151,10 +143,8 @@ def train(model, train_loader, criterion, optimizer, device, scaler):
     bar = tqdm(enumerate(train_loader), total=len(train_loader))
 
     for i, (inputs, labels) in bar:
-        # Apply CutMix only if it's defined and has num_classes > 0
         if cutmix is not None and cutmix.num_classes > 0:
-            inputs, labels = cutmix(inputs, labels) # Ensure labels are one-hot for CutMix with CrossEntropy
-        else: # If not using CutMix or if labels are not one-hot, ensure they are LongTensor
+            inputs, labels = cutmix(inputs, labels)
             labels = labels.long()
 
         inputs, labels = inputs.to(device), labels.to(device)
@@ -163,8 +153,6 @@ def train(model, train_loader, criterion, optimizer, device, scaler):
 
         with torch.amp.autocast('cuda'):
             outputs = model(inputs)
-            # If CutMix is used, labels are already one-hot and CrossEntropyLoss can handle it.
-            # If not, labels are class indices.
             loss = criterion(outputs, labels)
 
         scaler.scale(loss).backward()
@@ -187,14 +175,13 @@ def validate(model, val_loader, criterion, device):
 
     with torch.no_grad():
         for i, (inputs, labels) in bar:
-            inputs, labels = inputs.to(device), labels.to(device).long() # Ensure labels are LongTensor
+            inputs, labels = inputs.to(device), labels.to(device).long()
 
             with torch.amp.autocast('cuda'):
                 outputs = model(inputs)
-                loss = criterion(outputs, labels) # labels should be class indices here
+                loss = criterion(outputs, labels)
             running_loss += loss.item()
 
-            # For CrossEntropyLoss with class indices, argmax is correct
             _, predicted = torch.max(outputs.data, 1)
             total += labels.size(0)
             correct += (predicted == labels).sum().item()
@@ -220,11 +207,9 @@ def train_model(seed=42, freeze_backbone_initially=True, unfreeze_epoch=None):
                              dinov2_model_name=DINOV2_MODEL_NAME,
                              freeze_backbone=freeze_backbone_initially).to(device)
 
-    criterion = nn.CrossEntropyLoss() # Handles one-hot labels from CutMix or integer labels
+    criterion = nn.CrossEntropyLoss()
     scaler = torch.amp.GradScaler()
 
-    # Setup optimizer
-    # Initially, only train the classifier head if backbone is frozen
     if freeze_backbone_initially:
         print("Initially training only the classifier head.")
         optimizer = optim.AdamW(model.classifier_head.parameters(), lr=LEARNING_RATE, weight_decay=1e-5)
@@ -247,18 +232,17 @@ def train_model(seed=42, freeze_backbone_initially=True, unfreeze_epoch=None):
     for epoch in range(EPOCHS):
         print(f"\nEpoch {epoch + 1}/{EPOCHS}")
 
-        # Logic to unfreeze backbone at a certain epoch
         if freeze_backbone_initially and unfreeze_epoch is not None and epoch == unfreeze_epoch:
             print(f"Unfreezing DINOv2 backbone at epoch {epoch + 1} and re-initializing optimizer.")
             for param in model.dinov2.parameters():
                 param.requires_grad = True
-            # Re-initialize optimizer to include backbone parameters
+
             optimizer = optim.AdamW([
                 {'params': model.dinov2.parameters(), 'lr': LEARNING_RATE_BACKBONE},
                 {'params': model.classifier_head.parameters(), 'lr': LEARNING_RATE}
             ], weight_decay=1e-5)
             print("Optimizer re-initialized for full model training.")
-            model.get_parameter_size() # Show new trainable params
+            model.get_parameter_size()
 
 
         train_loss = train(model, train_loader, criterion,
